@@ -1,25 +1,108 @@
 ---
 title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+author: "Sarath"
+date: "June 6, 2017"
+output: html_document
 ---
 
+The assignment makes use of data from a personal activity monitoring device. This device collects data at 5 minute intervals through out the day. The data consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day
 
-## Loading and preprocessing the data
+### Download and Extract file
+```{r}
+if (!file.exists("activity.csv")) {
+  download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip","activity.zip")
+  unzip(zipfile="activity.zip")
+  }
+```
 
+### Loading Data to variable
+```{r}
+ActivityData <- read.csv("activity.csv")
+```
 
+### Load Libraries required for plotting
+```{r}
+library(ggplot2)
+```
 
-## What is mean total number of steps taken per day?
+### Calculating Steps / Day
+```{r}
+StepsByDate <- tapply(ActivityData$steps, ActivityData$date, sum, na.rm=TRUE)
+g <- qplot(StepsByDate, binwidth=1000, xlab="Steps/day")
+print(g)
+```
 
+### Mean and Median of Steps/Day
+```{r}
+mean(StepsByDate, na.rm=TRUE)
+median(StepsByDate, na.rm=TRUE)
+```
+### Calculating steps per Interval
+```{r}
+AvgStepsByInterval <- aggregate(x=list(steps=ActivityData$steps), by=list(interval=ActivityData$interval),
+                      mean, na.rm=TRUE)
+g <- ggplot(data=AvgStepsByInterval, aes(x=interval, y=steps)) +
+  geom_line() +
+  xlab("5-minute Interval") +
+  ylab("Avg No: of Steps")
+print(g)
+```
 
+### Identifying missing data
+```{r}
+MissingData <- is.na(ActivityData$steps)
+table(MissingData)
+```
 
-## What is the average daily activity pattern?
+### Imputing missing data
+```{r}
+FilledData <- ActivityData
+Fillvalue <- function(steps, interval) {
+  Filled <- NA
+  if (!is.na(steps))
+    Filled <- c(steps)
+  else
+    Filled <- (AvgStepsByInterval[AvgStepsByInterval$interval==interval, "steps"])
+  return(Filled)
+}
 
+FilledData$steps <- mapply(Fillvalue, FilledData$steps, FilledData$interval)
+```
 
+### Steps / Day with Imputed Data
+```{r}
+StepsByDate <- tapply(FilledData$steps, FilledData$date, sum)
+g <- qplot(StepsByDate, binwidth=1000, xlab="Steps/Day")
+print(g)
+```
 
-## Imputing missing values
+### Recalculated Mean and Median of Steps/Day
+```{r}
+mean(StepsByDate)
+median(StepsByDate)
+```
 
+### Finding patterns of Weekdays and Weekends
+```{r}
 
+DayType <- function(date) {
+  day <- weekdays(date)
+  if (day %in% c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"))
+    return("weekday")
+  else if (day %in% c("Saturday", "Sunday"))
+    return("weekend")
+  else
+    stop("invalid date")
+}
 
-## Are there differences in activity patterns between weekdays and weekends?
+FilledData$date <- as.Date(FilledData$date)
+FilledData$day <- sapply(FilledData$date, FUN=DayType)
+```
+
+### Plotting interval based steps on weekdays and weekends
+```{r}
+AvgStepsByInterval <- aggregate(steps ~ interval + day, data=FilledData, mean)
+g <- ggplot(AvgStepsByInterval, aes(interval, steps)) + geom_line() + facet_grid(day ~ .) +
+  xlab("5-minute interval") + ylab("Number of steps")
+print(g)
+```
